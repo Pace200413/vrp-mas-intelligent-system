@@ -2,53 +2,55 @@ package core;
 
 import java.util.*;
 
+/** Greedy solver that respects capacity *and* time windows (with 1-min tolerance). */
 public class NearestNeighborSolver {
-    public ArrayList<Route> generateRoutes(VRPInstance instance) {
+
+    private static final double EPS = 1.0;   // 1-minute slack
+
+    public ArrayList<Route> generateRoutes(VRPInstance inst, int vehicleCapacity) {
         ArrayList<Route> routes = new ArrayList<>();
         Set<Integer> visited = new HashSet<>();
 
-        while (visited.size() < instance.customers.size()) {
+        while (visited.size() < inst.customers.size()) {
             Route route = new Route();
-            Node current = instance.depot;
+            route.capacity = vehicleCapacity;
+
+            Node prev = inst.depot;
+            double time = 0;
 
             while (true) {
-                Node next = findNearestFeasible(current, instance.customers, visited, route);
-                if (next == null) break;
+                Node next = null;
+                double best = Double.MAX_VALUE;
+
+                for (Node c : inst.customers) {
+                    if (visited.contains(c.ID) || !route.canAdd(c)) continue;
+                    if (!canServe(prev, c, time)) continue;
+
+                    double d = prev.distanceTo(c);
+                    if (d < best) { best = d; next = c; }
+                }
+                if (next == null) break;   // no feasible customer left
+
+                /* update clock */
+                double travel = prev.distanceTo(next);
+                double arrive = time + travel;
+                double wait   = Math.max(0, next.ready - arrive);
+                time = arrive + wait + next.service;
+
                 route.addCustomer(next);
                 visited.add(next.ID);
-                current = next;
+                prev = next;
             }
-
+            route.updateArrivals(inst.depot);
             routes.add(route);
         }
-
         return routes;
     }
 
-    private Node findNearestFeasible(Node current, List<Node> customers, Set<Integer> visited, Route route) {
-        Node nearest = null;
-        double minDist = Double.MAX_VALUE;
-
-        for (Node c : customers) {
-            if (visited.contains(c.ID)) continue;
-            if (!route.canAdd(c)) continue;
-
-            double dist = current.distanceTo(c);
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = c;
-            }
-        }
-
-        return nearest;
-    }
-
-    public void printRoutes(ArrayList<Route> routes, Node depot) {
-        int i = 1;
-        for (Route route : routes) {
-            System.out.println("Route " + i++ + ": " + route);
-            System.out.printf("  Load: %d / %d | Distance: %.2f\n", route.load, route.capacity, route.calculateTotalDistance(depot));
-        }
+    /** Check if arrival would violate due-time */
+    private boolean canServe(Node prev, Node cand, double currentTime) {
+        double travel = prev.distanceTo(cand);
+        double arrive = currentTime + travel;
+        return arrive <= cand.due + EPS;
     }
 }
-
