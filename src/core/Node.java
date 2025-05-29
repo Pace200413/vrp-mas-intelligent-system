@@ -1,19 +1,56 @@
 package core;
 
-public class Node {
-    public int ID, x, y, demand;
+import java.util.*;
 
-    public Node(int ID, int x, int y, int demand) {
-        this.ID = ID;
-        this.x = x;
-        this.y = y;
-        this.demand = demand;
+/** Greedy solver that respects capacity *and* time windows (with 1-min tolerance). */
+public class NearestNeighborSolver {
+
+    private static final double EPS = 1.0;   // 1-minute slack
+
+    public ArrayList<Route> generateRoutes(VRPInstance inst, int vehicleCapacity) {
+        ArrayList<Route> routes = new ArrayList<>();
+        Set<Integer> visited = new HashSet<>();
+
+        while (visited.size() < inst.customers.size()) {
+            Route route = new Route();
+            route.capacity = vehicleCapacity;
+
+            Node prev = inst.depot;
+            double time = 0;
+
+            while (true) {
+                Node next = null;
+                double best = Double.MAX_VALUE;
+
+                for (Node c : inst.customers) {
+                    if (visited.contains(c.ID) || !route.canAdd(c)) continue;
+                    if (!canServe(prev, c, time)) continue;
+
+                    double d = prev.distanceTo(c);
+                    if (d < best) { best = d; next = c; }
+                }
+                if (next == null) break;   // no feasible customer left
+
+                /* update clock */
+                double travel = prev.distanceTo(next);
+                double arrive = time + travel;
+                double wait   = Math.max(0, next.ready - arrive);
+                time = arrive + wait + next.service;
+
+                route.addCustomer(next);
+                visited.add(next.ID);
+                prev = next;
+            }
+            route.updateArrivals(inst.depot);
+            routes.add(route);
+        }
+        return routes;
     }
 
-    public double distanceTo(Node other) {
-        int dx = this.x - other.x;
-        int dy = this.y - other.y;
-        return Math.sqrt(dx * dx + dy * dy);
+    /** Check if arrival would violate due-time */
+    private boolean canServe(Node prev, Node cand, double currentTime) {
+        double travel = prev.distanceTo(cand);
+        double arrive = currentTime + travel;
+        return arrive <= cand.due + EPS;
     }
 }
-
