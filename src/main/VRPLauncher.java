@@ -62,17 +62,114 @@ public class VRPLauncher {
             try {
                 Runtime rt = Runtime.instance();
                 Profile p = new ProfileImpl();
-                p.setParameter(Profile.GUI, "true");
+                p.setParameter(Profile.GUI, "true");  // This automatically starts the RMA agent
                 ContainerController cc = rt.createMainContainer(p);
-
-                Object[] mraArgs = { algorithm, numAgents, numCustomers, vehicleCap, seed };
-                AgentController mra = cc.createNewAgent("mra", "agents.MasterRoutingAgent", mraArgs);
-                mra.start();
-
-                for (int i = 0; i < numAgents; i++) {
-                	Object[] daArgs = { vehicleCap };
-                	AgentController da = cc.createNewAgent("da" + i, "agents.DeliveryAgent", daArgs);
-                    da.start();
+                
+                // Small delay to ensure RMA GUI initializes properly
+                Thread.sleep(1000);
+                
+                // Start Sniffer agent with properly configured arguments
+                // Show a dialog to let the user know what's happening
+                JOptionPane.showMessageDialog(frame,
+                    "We'll now start the JADE platform with the Sniffer agent.\n" +
+                    "After clicking OK, wait for the JADE interfaces to load completely.\n" +
+                    "A new dialog will appear when you can start the agents.",
+                    "JADE Initialization", JOptionPane.INFORMATION_MESSAGE);
+                    
+                // Create the JADE platform and Sniffer first
+                try {
+                    // Create but don't start the agents yet
+                    final Object[] mraArgs = { algorithm, numAgents, numCustomers, vehicleCap, seed };
+                    final AgentController mra = cc.createNewAgent("mra", "agents.MasterRoutingAgent", mraArgs);
+                    
+                    final AgentController[] deliveryAgents = new AgentController[numAgents];
+                    for (int i = 0; i < numAgents; i++) {
+                        Object[] daArgs = { vehicleCap };
+                        deliveryAgents[i] = cc.createNewAgent("da" + i, "agents.DeliveryAgent", daArgs);
+                    }
+                    
+                    // Start the Sniffer agent
+                    AgentController sniffer = cc.createNewAgent("sniffer", "jade.tools.sniffer.Sniffer", null);
+                    sniffer.start();
+                    System.out.println("Started Sniffer agent successfully");
+                    
+                    // Wait for JADE to initialize properly
+                    Thread.sleep(3000);
+                    
+                    // Create a non-modal dialog with instructions and a button to start the agents
+                    JDialog dialog = new JDialog(frame, "Sniffer Setup Instructions", false);
+                    dialog.setSize(500, 400);
+                    dialog.setLayout(new BorderLayout());
+                    
+                    // Add instructions panel
+                    JPanel instructionsPanel = new JPanel(new BorderLayout());
+                    instructionsPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+                    
+                    JTextArea instructions = new JTextArea();
+                    instructions.setEditable(false);
+                    instructions.setLineWrap(true);
+                    instructions.setWrapStyleWord(true);
+                    instructions.setText(
+                        "====== SNIFFER AGENT SETUP ======\n\n" +
+                        "1. In the RMA window (with title 'rma@...'), right-click on 'sniffer' agent\n" +
+                        "2. Select 'Start Sniffer' from the menu\n" +
+                        "3. Wait for the Sniffer window to fully load (titled 'sniffer@...')\n" +
+                        "4. In the Sniffer window:\n" +
+                        "   - Right-click in the agents list (left panel)\n" +
+                        "   - Select 'Do sniff on this agent' and choose 'mra'\n");
+                    
+                    // Add agent list to instructions
+                    instructions.append("   - Also select these agents:\n");
+                    for (int i = 0; i < numAgents; i++) {
+                        instructions.append("     * da" + i + "\n");
+                    }
+                    
+                    instructions.append("\n5. Once you've selected all the agents to monitor, click 'Start Agents' below\n");
+                    instructions.append("\nNOTE: Make sure the Sniffer window is fully loaded before trying to select agents!");
+                    
+                    // Scroll pane for instructions
+                    JScrollPane scrollPane = new JScrollPane(instructions);
+                    instructionsPanel.add(scrollPane, BorderLayout.CENTER);
+                    
+                    // Add button panel
+                    JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                    JButton startButton = new JButton("Start Agents");
+                    startButton.addActionListener(startEvent -> {
+                        dialog.dispose();
+                        
+                        try {
+                            // Start the MRA and DeliveryAgents
+                            System.out.println("\nStarting agents now!");
+                            
+                            mra.start();
+                            System.out.println("Started MasterRoutingAgent (mra)");
+                            
+                            for (int i = 0; i < numAgents; i++) {
+                                deliveryAgents[i].start();
+                                System.out.println("Started DeliveryAgent (da" + i + ")");
+                            }
+                        } catch (Exception ex) {
+                            System.err.println("Error starting agents: " + ex.getMessage());
+                            ex.printStackTrace();
+                            JOptionPane.showMessageDialog(frame, 
+                                "Error starting agents: " + ex.getMessage(),
+                                "Error", JOptionPane.ERROR_MESSAGE);
+                        }
+                    });
+                    
+                    buttonPanel.add(startButton);
+                    
+                    // Add components to dialog
+                    dialog.add(instructionsPanel, BorderLayout.CENTER);
+                    dialog.add(buttonPanel, BorderLayout.SOUTH);
+                    dialog.setLocationRelativeTo(frame);
+                    
+                    // Show the dialog (this will block until user clicks the button)
+                    dialog.setVisible(true);
+                    
+                } catch (Exception ex) {
+                    System.out.println("Error: " + ex.getMessage());
+                    ex.printStackTrace();
                 }
 
             } catch (Exception ex) {
@@ -81,5 +178,6 @@ public class VRPLauncher {
             }
         });
     }
-}
+    
 
+}
