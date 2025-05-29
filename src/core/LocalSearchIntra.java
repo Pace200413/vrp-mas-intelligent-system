@@ -11,34 +11,58 @@ public class LocalSearchIntra {
 
             for (Route route : routes) {
                 double bestDelta = 0;
-                int bestFrom = -1, bestTo = -1;
+                int bestFrom = -1;
+                int bestTo = -1;
 
                 for (int i = 0; i < route.customers.size(); i++) {
-                    Node n = route.customers.remove(i);
-                    for (int j = 0; j <= route.customers.size(); j++) {
+                    for (int j = 0; j < route.customers.size(); j++) {
+                        if (i == j) continue;
+
+                        Node n = route.customers.get(i);
+                        route.customers.remove(i);
                         route.customers.add(j, n);
-                        double newDist = route.calculateTotalDistance(depot);
+
+                        route.updateArrivals(depot);
+                        boolean twOk = true;
+                        for (int k = 0; k < route.customers.size(); k++) {
+                            Node node = route.customers.get(k);
+                            int arrival = route.arrival.get(k);
+                            if (arrival > node.due || arrival < node.ready - 2) {
+                                twOk = false;
+                                break;
+                            }
+                        }
+
+                        double dist = route.calculateTotalDistance(depot);
+
+                        // Undo move
                         route.customers.remove(j);
+                        route.customers.add(i, n);
 
-                        double originalDist = route.calculateTotalDistance(depot);
-                        double delta = originalDist - newDist;
+                        if (twOk) {
+                            double origDist = route.calculateTotalDistance(depot);
+                            double delta = origDist - dist;
 
-                        if (delta > bestDelta) {
-                            bestDelta = delta;
-                            bestFrom = i;
-                            bestTo = j;
+                            if (delta > bestDelta) {
+                                bestDelta = delta;
+                                bestFrom = i;
+                                bestTo = j;
+                            }
                         }
                     }
-                    route.customers.add(i, n);
                 }
 
-                if (bestDelta > 0 && bestFrom != -1 && bestTo != -1) {
+                if (bestFrom != -1 && bestTo != -1) {
                     Node n = route.customers.remove(bestFrom);
                     route.customers.add(bestTo, n);
                     improvement = true;
                 }
             }
         }
+
+        // Final update of arrival times to support visualisation
+        for (Route route : routes) {
+            route.updateArrivals(depot);
+        }
     }
 }
-
