@@ -22,20 +22,33 @@ public class LocalSearchInter {
                         if (!to.canAdd(customer)) continue;
 
                         for (int l = 0; l <= to.customers.size(); l++) {
-                            double before = from.calculateTotalDistance(depot) + to.calculateTotalDistance(depot);
-
+                            // Simulate move
                             from.customers.remove(j);
                             from.load -= customer.demand;
 
                             to.customers.add(l, customer);
                             to.load += customer.demand;
 
-                            double after = from.calculateTotalDistance(depot) + to.calculateTotalDistance(depot);
+                            boolean twOk = true;
+                            for (Node c : to.customers) {
+                                if (!to.canAddTW(depot, c)) {
+                                    twOk = false;
+                                    break;
+                                }
+                            }
 
-                            if (after < before) {
+                            double before = from.calculateTotalDistance(depot) + to.calculateTotalDistance(depot);
+                            double after = before;
+
+                            if (twOk) {
+                                after = from.calculateTotalDistance(depot) + to.calculateTotalDistance(depot);
+                            }
+
+                            if (twOk && after < before) {
                                 improvement = true;
                                 break;
                             } else {
+                                // Rollback
                                 to.customers.remove(l);
                                 to.load -= customer.demand;
                                 from.customers.add(j, customer);
@@ -51,4 +64,3 @@ public class LocalSearchInter {
         }
     }
 }
-
